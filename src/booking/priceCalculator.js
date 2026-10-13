@@ -30,6 +30,18 @@ function validateStay(nights, options = {}) {
   }
 }
 
+// Price of the i-th night of a stay: Friday and Saturday nights get the weekend surcharge.
+function priceNight(start, i, nightlyRateCents) {
+  const night = new Date(start.getTime() + i * MS_PER_DAY);
+  const day = night.getUTCDay();
+  const isWeekend = day === 5 || day === 6;
+  return {
+    date: night.toISOString().slice(0, 10),
+    weekend: isWeekend,
+    priceCents: isWeekend ? Math.round(nightlyRateCents * WEEKEND_SURCHARGE) : nightlyRateCents
+  };
+}
+
 function calculatePrice(booking) {
   const { nightlyRateCents, checkin, checkout, discountPercent = 0, isRegular = false } = booking;
   const nights = countNights(checkin, checkout);
@@ -39,10 +51,9 @@ function calculatePrice(booking) {
   let subtotal = nights * nightlyRateCents;
   let weekendNights = 0;
   for (let i = 0; i < nights; i += 1) {
-    const night = new Date(start.getTime() + i * MS_PER_DAY);
-    const day = night.getUTCDay();
-    if (day === 5 || day === 6) {
-      subtotal += Math.round(nightlyRateCents * WEEKEND_SURCHARGE) - nightlyRateCents;
+    const night = priceNight(start, i, nightlyRateCents);
+    if (night.weekend) {
+      subtotal += night.priceCents - nightlyRateCents;
       weekendNights += 1;
     }
   }
@@ -65,14 +76,7 @@ function quoteNightly(booking) {
   const start = parseDate(checkin);
   const lines = [];
   for (let i = 0; i < nights; i += 1) {
-    const night = new Date(start.getTime() + i * MS_PER_DAY);
-    const day = night.getUTCDay();
-    const isWeekend = day === 5 || day === 6;
-    lines.push({
-      date: night.toISOString().slice(0, 10),
-      weekend: isWeekend,
-      priceCents: isWeekend ? Math.round(nightlyRateCents * WEEKEND_SURCHARGE) : nightlyRateCents
-    });
+    lines.push(priceNight(start, i, nightlyRateCents));
   }
   return lines;
 }
