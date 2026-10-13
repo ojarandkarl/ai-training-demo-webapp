@@ -1,0 +1,1020 @@
+{
+  "info": {
+    "name": "Restful-booker broneering",
+    "description": "Session 5 Harjutus 1 API-testid: demo-scenarios/session-4-restful-booker/3_API_testi_kontrollnimekiri.md ja nõuded 1_Broneeringu_nouded_mustand.md. Käivitus: npm run test:api -- automation/api/broneering.postman_collection.json",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('randomStay')) {",
+          "    // Random 2-night stay at least 3 months ahead, so we do not clash with other participants.",
+          "    pm.collectionVariables.set('randomStay', JSON.stringify((() => {",
+          "    const day = 24 * 60 * 60 * 1000;",
+          "    const checkin = new Date(Date.now() + (95 + Math.floor(Math.random() * 200)) * day);",
+          "    const iso = (d) => d.toISOString().slice(0, 10);",
+          "    return { checkin: iso(checkin), checkout: iso(new Date(checkin.getTime() + 2 * day)) };",
+          "    })()));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://restful-booker.herokuapp.com"
+    },
+    {
+      "key": "randomStay",
+      "value": ""
+    },
+    {
+      "key": "bookingid",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "A1 Kehtiv broneering salvestatakse nagu saadeti",
+      "item": [
+        {
+          "name": "A1 POST /booking kehtivate andmetega",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const stay = JSON.parse(pm.collectionVariables.get('randomStay'));",
+                  "  pm.collectionVariables.set('bookingid', '');",
+                  "  pm.collectionVariables.set('firstname', 'Test');",
+                  "  pm.collectionVariables.set('lastname', 'Koolitus');",
+                  "  pm.collectionVariables.set('checkin', stay.checkin);",
+                  "  pm.collectionVariables.set('checkout', stay.checkout);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const sent = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+                  "  pm.test('A1 status 200', () => pm.response.to.have.status(200));",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('bookingid', json.bookingid || '');",
+                  "  pm.collectionVariables.set('a1Sent', JSON.stringify(sent));",
+                  "  pm.test('A1 vastuses on bookingid ja saadetud broneering', () => {",
+                  "  pm.expect(json.bookingid).to.be.a('number');",
+                  "  pm.expect(json.booking).to.eql(sent);",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"{{firstname}}\",\n  \"lastname\": \"{{lastname}}\",\n  \"totalprice\": 240,\n  \"depositpaid\": true,\n  \"bookingdates\": { \"checkin\": \"{{checkin}}\", \"checkout\": \"{{checkout}}\" },\n  \"additionalneeds\": \"Hommikusöök\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A1 GET salvestatud broneering",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  if (!pm.collectionVariables.get('bookingid')) {",
+                  "  console.log('Skip: previous POST did not return a bookingid, nothing was stored.');",
+                  "  pm.execution.skipRequest();",
+                  "  }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A1 GET status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('A1 salvestatud andmed = saadetud andmed', () => {",
+                  "  pm.expect(pm.response.json()).to.eql(JSON.parse(pm.collectionVariables.get('a1Sent')));",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "A2 Nõue 2.1 - lahkumine enne saabumist",
+      "item": [
+        {
+          "name": "A2 POST /booking checkout enne checkini",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const stay = JSON.parse(pm.collectionVariables.get('randomStay'));",
+                  "  pm.collectionVariables.set('bookingid', '');",
+                  "  pm.collectionVariables.set('firstname', 'Test');",
+                  "  pm.collectionVariables.set('lastname', 'Koolitus');",
+                  "  // Swapped on purpose: checkout is 2 days before checkin.",
+                  "  pm.collectionVariables.set('checkin', stay.checkout);",
+                  "  pm.collectionVariables.set('checkout', stay.checkin);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const json = (() => { try { return pm.response.json(); } catch (e) { return {}; } })();",
+                  "  pm.collectionVariables.set('bookingid', json.bookingid || '');",
+                  "  pm.test('A2 status 400 (nõue 2.1: saabumine peab olema enne lahkumist)', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  });",
+                  "  pm.test('A2 broneeringut ei looda (vastuses pole bookingid-d)', () => {",
+                  "  pm.expect(json.bookingid, 'API lõi broneeringu id-ga ' + json.bookingid).to.be.undefined;",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"{{firstname}}\",\n  \"lastname\": \"{{lastname}}\",\n  \"totalprice\": 240,\n  \"depositpaid\": true,\n  \"bookingdates\": { \"checkin\": \"{{checkin}}\", \"checkout\": \"{{checkout}}\" },\n  \"additionalneeds\": \"Hommikusöök\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A2 GET kas vigane broneering salvestati",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  if (!pm.collectionVariables.get('bookingid')) {",
+                  "  console.log('Skip: previous POST did not return a bookingid, nothing was stored.');",
+                  "  pm.execution.skipRequest();",
+                  "  }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const stored = pm.response.json();",
+                  "  pm.test('A2 salvestatud broneeringus ei ole lahkumine enne saabumist', () => {",
+                  "  pm.expect(stored.bookingdates.checkout > stored.bookingdates.checkin,",
+                  "    `salvestati checkin=${stored.bookingdates.checkin}, checkout=${stored.bookingdates.checkout}`).to.be.true;",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "A3 Nõue 6.1 - eesnimi puudub",
+      "item": [
+        {
+          "name": "A3 POST /booking ilma firstname väljata",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const stay = JSON.parse(pm.collectionVariables.get('randomStay'));",
+                  "  pm.collectionVariables.set('bookingid', '');",
+                  "  pm.collectionVariables.set('checkin', stay.checkin);",
+                  "  pm.collectionVariables.set('checkout', stay.checkout);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const json = (() => { try { return pm.response.json(); } catch (e) { return {}; } })();",
+                  "  pm.collectionVariables.set('bookingid', json.bookingid || '');",
+                  "  pm.test('A3 status 400 (kliendi viga, mitte serveri viga)', () => pm.response.to.have.status(400));",
+                  "  pm.test('A3 broneeringut ei looda', () => pm.expect(json.bookingid).to.be.undefined);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lastname\": \"Koolitus\",\n  \"totalprice\": 240,\n  \"depositpaid\": true,\n  \"bookingdates\": { \"checkin\": \"{{checkin}}\", \"checkout\": \"{{checkout}}\" }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A3 GET kas eesnimeta broneering salvestati",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  if (!pm.collectionVariables.get('bookingid')) {",
+                  "  console.log('Skip: previous POST did not return a bookingid, nothing was stored.');",
+                  "  pm.execution.skipRequest();",
+                  "  }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A3 eesnimeta broneeringut ei tohiks olla salvestatud', () => {",
+                  "  pm.expect.fail('salvestati: ' + pm.response.text());",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "A4 Nõue 6.2 - täpitähed nimes",
+      "item": [
+        {
+          "name": "A4 POST /booking täpitähtedega nimega",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const stay = JSON.parse(pm.collectionVariables.get('randomStay'));",
+                  "  pm.collectionVariables.set('bookingid', '');",
+                  "  pm.collectionVariables.set('firstname', 'Õie');",
+                  "  pm.collectionVariables.set('lastname', 'Šarlote-Jüri');",
+                  "  pm.collectionVariables.set('checkin', stay.checkin);",
+                  "  pm.collectionVariables.set('checkout', stay.checkout);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A4 status 200', () => pm.response.to.have.status(200));",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('bookingid', json.bookingid || '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"{{firstname}}\",\n  \"lastname\": \"{{lastname}}\",\n  \"totalprice\": 240,\n  \"depositpaid\": true,\n  \"bookingdates\": { \"checkin\": \"{{checkin}}\", \"checkout\": \"{{checkout}}\" },\n  \"additionalneeds\": \"Hommikusöök\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A4 GET nimi salvestati muutmata kujul",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  if (!pm.collectionVariables.get('bookingid')) {",
+                  "  console.log('Skip: previous POST did not return a bookingid, nothing was stored.');",
+                  "  pm.execution.skipRequest();",
+                  "  }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A4 GET status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('A4 firstname ja lastname on täpitähtedega samad', () => {",
+                  "  const stored = pm.response.json();",
+                  "  pm.expect(stored.firstname).to.eql('Õie');",
+                  "  pm.expect(stored.lastname).to.eql('Šarlote-Jüri');",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "A5 Muutmine ja kustutamine ilma tokenita",
+      "item": [
+        {
+          "name": "A5 POST /booking (eeltingimus)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  const stay = JSON.parse(pm.collectionVariables.get('randomStay'));",
+                  "  pm.collectionVariables.set('bookingid', '');",
+                  "  pm.collectionVariables.set('firstname', 'Test');",
+                  "  pm.collectionVariables.set('lastname', 'Koolitus');",
+                  "  pm.collectionVariables.set('checkin', stay.checkin);",
+                  "  pm.collectionVariables.set('checkout', stay.checkout);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A5 eeltingimus: broneering loodud', () => pm.response.to.have.status(200));",
+                  "  pm.collectionVariables.set('bookingid', pm.response.json().bookingid || '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"{{firstname}}\",\n  \"lastname\": \"{{lastname}}\",\n  \"totalprice\": 240,\n  \"depositpaid\": true,\n  \"bookingdates\": { \"checkin\": \"{{checkin}}\", \"checkout\": \"{{checkout}}\" },\n  \"additionalneeds\": \"Hommikusöök\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A5 PUT /booking ilma tokenita",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A5 PUT status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Muudetud\",\n  \"lastname\": \"Koolitus\",\n  \"totalprice\": 1,\n  \"depositpaid\": false,\n  \"bookingdates\": { \"checkin\": \"{{checkin}}\", \"checkout\": \"{{checkout}}\" }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A5 DELETE /booking ilma tokenita",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A5 DELETE status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "A5 GET broneering on alles ja muutmata",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  if (!pm.collectionVariables.get('bookingid')) {",
+                  "  console.log('Skip: previous POST did not return a bookingid, nothing was stored.');",
+                  "  pm.execution.skipRequest();",
+                  "  }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A5 GET status 200 (ei kustutatud)', () => pm.response.to.have.status(200));",
+                  "  pm.test('A5 andmed muutmata (firstname ja hind)', () => {",
+                  "  const stored = pm.response.json();",
+                  "  pm.expect(stored.firstname).to.eql('Test');",
+                  "  pm.expect(stored.totalprice).to.eql(240);",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "A6 Põhivoog tokeniga (käivitub ainult --env-var password=... korral)",
+      "item": [
+        {
+          "name": "A6 POST /auth",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  if (!pm.variables.get('password')) {",
+                  "    console.log('Skip A6: anna parool käsureal: --env-var password=<parool>');",
+                  "    pm.collectionVariables.set('token', '');",
+                  "    pm.execution.skipRequest();",
+                  "  }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A6 auth status 200 ja token olemas', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().token).to.be.a('string');",
+                  "  });",
+                  "  pm.collectionVariables.set('token', pm.response.json().token || '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"username\": \"admin\", \"password\": \"{{password}}\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A6 PUT /booking tokeniga muudab kuupäevi",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  if (!pm.collectionVariables.get('token') || !pm.collectionVariables.get('bookingid')) {",
+                  "    pm.execution.skipRequest();",
+                  "  } else {",
+                  "    const day = 24 * 60 * 60 * 1000;",
+                  "    const checkin = new Date(new Date(pm.collectionVariables.get('checkout')).getTime() + 7 * day);",
+                  "    const iso = (d) => d.toISOString().slice(0, 10);",
+                  "    pm.collectionVariables.set('newCheckin', iso(checkin));",
+                  "    pm.collectionVariables.set('newCheckout', iso(new Date(checkin.getTime() + 2 * day)));",
+                  "  }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A6 PUT status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('A6 PUT vastuses on uued kuupäevad', () => {",
+                  "    pm.expect(pm.response.json().bookingdates).to.eql({",
+                  "      checkin: pm.collectionVariables.get('newCheckin'),",
+                  "      checkout: pm.collectionVariables.get('newCheckout')",
+                  "    });",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "token={{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Test\",\n  \"lastname\": \"Koolitus\",\n  \"totalprice\": 240,\n  \"depositpaid\": true,\n  \"bookingdates\": { \"checkin\": \"{{newCheckin}}\", \"checkout\": \"{{newCheckout}}\" }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "A6 GET muudetud kuupäevad on salvestatud",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  " if (!pm.collectionVariables.get('token')) pm.execution.skipRequest();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A6 salvestatud kuupäevad = uued kuupäevad', () => {",
+                  "    pm.expect(pm.response.json().bookingdates).to.eql({",
+                  "      checkin: pm.collectionVariables.get('newCheckin'),",
+                  "      checkout: pm.collectionVariables.get('newCheckout')",
+                  "    });",
+                  "  });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "A6 DELETE /booking tokeniga",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  " if (!pm.collectionVariables.get('token')) pm.execution.skipRequest();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A6 DELETE status 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "token={{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "A6 GET kustutatud broneering annab 404",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  " if (!pm.collectionVariables.get('token')) pm.execution.skipRequest();"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "  pm.test('A6 GET pärast kustutamist status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/booking/{{bookingid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "booking",
+                "{{bookingid}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
